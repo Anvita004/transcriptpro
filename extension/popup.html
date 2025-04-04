@@ -3,300 +3,337 @@
 <html>
 
 <head>
+  <meta charset="UTF-8">
   <title>Meeting Transcript Pro</title>
   <style>
     @import url("https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap");
 
     body {
-      width: 600px;
-      padding: 1.5rem;
-      background: #ffffff;
-      color: #1f2937;
-      font-family: "Inter", sans-serif;
-      font-size: 0.95rem;
+      width: 400px;
       margin: 0;
+      padding: 0;
+      font-family: 'Inter', Arial, sans-serif;
+      background: linear-gradient(135deg, #1a1a1a 0%, #2a1a3a 100%);
+      color: #ffffff;
+      min-height: 100vh;
     }
 
-    h1 {
-      font-size: 1.75rem;
-      margin: 0;
-      font-weight: 700;
-      color: #1f2937;
+    .container {
+      padding: 20px;
     }
 
     .header {
-      margin-bottom: 2rem;
-      padding-bottom: 1rem;
-      border-bottom: 1px solid #e5e7eb;
+      text-align: center;
+      margin-bottom: 30px;
+      padding: 20px;
+      background: rgba(30, 30, 30, 0.8);
+      border-radius: 12px;
+      box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3);
+      backdrop-filter: blur(10px);
     }
 
-    .header-content {
+    .title {
+      font-size: 24px;
+      margin: 0;
+      background: linear-gradient(90deg, #9d4edd, #c77dff);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
       display: flex;
       align-items: center;
-      justify-content: space-between;
+      justify-content: center;
+      gap: 10px;
     }
 
-    .header-text {
-      color: #1f2937;
+    .title span {
+      font-size: 28px;
     }
 
-    .header-description {
-      margin: 0.5rem 0 0;
-      color: #6b7280;
-      font-size: 0.9rem;
-    }
-
-    .logo {
-      width: 48px;
-      height: 48px;
-      border-radius: 12px;
-      box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
-    }
-
-    .main-content {
-      display: grid;
-      grid-template-columns: 1fr 1fr;
-      gap: 1.5rem;
-      margin-bottom: 2rem;
+    .description {
+      color: #b3b3b3;
+      margin-top: 10px;
+      font-size: 14px;
     }
 
     .settings-panel {
-      background: #f9fafb;
+      background: rgba(30, 30, 30, 0.8);
+      padding: 20px;
       border-radius: 12px;
-      padding: 1.25rem;
-      border: 1px solid #e5e7eb;
+      margin-bottom: 20px;
+      box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3);
+      backdrop-filter: blur(10px);
     }
 
-    .transcript-history {
-      background: #f9fafb;
-      border-radius: 12px;
-      padding: 1.25rem;
-      border: 1px solid #e5e7eb;
+    .mode-selection {
+      display: flex;
+      gap: 20px;
+      margin-bottom: 20px;
     }
 
-    .panel-title {
-      font-size: 1.1rem;
+    .mode-option {
+      flex: 1;
+      text-align: center;
+      padding: 15px;
+      background: rgba(40, 40, 40, 0.6);
+      border-radius: 8px;
+      border: 2px solid rgba(255, 255, 255, 0.1);
+      cursor: pointer;
+      transition: all 0.3s ease;
+      position: relative;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 10px;
+    }
+
+    .mode-option:hover {
+      border-color: rgba(157, 78, 221, 0.3);
+    }
+
+    .mode-option input[type="radio"] {
+      width: 18px;
+      height: 18px;
+      margin: 0;
+      cursor: pointer;
+      accent-color: #9d4edd;
+    }
+
+    .mode-content {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .mode-label {
+      display: block;
       font-weight: 600;
-      margin: 0 0 1rem 0;
-      color: #1f2937;
-    }
-
-    .radio-item {
-      display: flex;
-      gap: 0.75rem;
-      align-items: start;
-      margin-bottom: 1rem;
-      padding: 0.75rem;
-      border-radius: 8px;
-      transition: background-color 0.2s;
-    }
-
-    .radio-item:hover {
-      background: #f3f4f6;
-    }
-
-    .sub-text {
-      color: #6b7280;
-      font-size: 0.85rem;
-      margin-top: 0.25rem;
-    }
-
-    input[type="radio"] {
-      margin-top: 0.25rem;
-      accent-color: #1f2937;
-      width: 16px;
-      height: 16px;
-      cursor: pointer;
-    }
-
-    label {
-      margin: 0;
-      font-size: 0.95rem;
-      cursor: pointer;
-      flex: 1;
-    }
-
-    .transcript-list {
-      max-height: 300px;
-      overflow-y: auto;
-      margin: 0;
-      padding: 0;
-    }
-
-    .transcript-item {
-      display: flex;
-      align-items: center;
-      justify-content: space-between;
-      padding: 0.75rem;
-      border-radius: 8px;
-      margin-bottom: 0.5rem;
-      background: #ffffff;
-      border: 1px solid #e5e7eb;
-      transition: background-color 0.2s;
-    }
-
-    .transcript-item:hover {
-      background: #f3f4f6;
-    }
-
-    .transcript-info {
-      flex: 1;
-    }
-
-    .transcript-title {
-      font-weight: 500;
-      margin: 0;
-      color: #1f2937;
-    }
-
-    .transcript-date {
-      font-size: 0.8rem;
-      color: #6b7280;
-      margin: 0.25rem 0 0;
-    }
-
-    .transcript-actions {
-      display: flex;
-      gap: 0.5rem;
-    }
-
-    .btn {
-      padding: 0.5rem 1rem;
-      border-radius: 6px;
-      font-size: 0.9rem;
-      font-weight: 500;
-      cursor: pointer;
-      transition: all 0.2s;
-      border: none;
-      display: inline-flex;
-      align-items: center;
-      gap: 0.5rem;
-    }
-
-    .btn-primary {
-      background: #1f2937;
       color: #ffffff;
     }
 
-    .btn-primary:hover {
-      background: #111827;
+    .mode-description {
+      font-size: 12px;
+      color: #b3b3b3;
     }
 
-    .btn-secondary {
-      background: #f3f4f6;
-      color: #1f2937;
+    .mode-option.selected {
+      border: 2px solid #9d4edd;
+      background: rgba(157, 78, 221, 0.1);
     }
 
-    .btn-secondary:hover {
-      background: #e5e7eb;
+    .mode-status {
+      margin-top: 10px;
+      padding: 8px;
+      border-radius: 6px;
+      text-align: center;
+      font-size: 14px;
+      background: rgba(40, 40, 40, 0.6);
+      border: 1px solid rgba(157, 78, 221, 0.3);
+    }
+
+    .mode-status.auto {
+      color: #4ade80;
+      border-color: rgba(74, 222, 128, 0.3);
+    }
+
+    .mode-status.manual {
+      color: #f87171;
+      border-color: rgba(248, 113, 113, 0.3);
+    }
+
+    .action-buttons {
+      display: flex;
+      gap: 10px;
+      margin-top: 20px;
+    }
+
+    .action-button {
+      flex: 1;
+      padding: 12px;
+      border: none;
+      border-radius: 8px;
+      background: linear-gradient(135deg, #9d4edd 0%, #c77dff 100%);
+      color: white;
+      font-weight: 600;
+      cursor: pointer;
+      transition: all 0.3s ease;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 8px;
+      text-decoration: none;
+    }
+
+    .action-button:hover {
+      transform: translateY(-2px);
+      box-shadow: 0 8px 25px rgba(157, 78, 221, 0.4);
+    }
+
+    .action-button:disabled {
+      opacity: 0.5;
+      cursor: not-allowed;
+      transform: none;
+      pointer-events: none;
+    }
+
+    .action-button.disabled {
+      opacity: 0.5;
+      cursor: not-allowed;
+      transform: none;
+      pointer-events: none;
+    }
+
+    .action-button span {
+      font-size: 18px;
     }
 
     .footer {
-      display: flex;
-      justify-content: space-between;
-      align-items: center;
-      padding-top: 1rem;
-      border-top: 1px solid #e5e7eb;
+      margin-top: 20px;
+      text-align: center;
+      padding: 15px;
+      background: rgba(30, 30, 30, 0.8);
+      border-radius: 12px;
+      box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3);
+      backdrop-filter: blur(10px);
     }
 
     .footer-links {
       display: flex;
-      gap: 1rem;
+      justify-content: center;
+      gap: 20px;
+      margin-bottom: 10px;
     }
 
     .footer-link {
-      color: #6b7280;
+      color: #9d4edd;
       text-decoration: none;
-      font-size: 0.85rem;
-      transition: color 0.2s;
+      font-size: 14px;
+      transition: all 0.3s ease;
     }
 
     .footer-link:hover {
-      color: #1f2937;
+      color: #c77dff;
+      text-decoration: underline;
     }
 
     .version {
-      color: #6b7280;
-      font-size: 0.85rem;
+      color: #b3b3b3;
+      font-size: 12px;
     }
 
-    /* Scrollbar styling */
-    ::-webkit-scrollbar {
-      width: 8px;
+    .status-indicator {
+      margin-top: 10px;
+      padding: 8px;
+      border-radius: 6px;
+      text-align: center;
+      font-size: 14px;
+      background: rgba(40, 40, 40, 0.6);
     }
 
-    ::-webkit-scrollbar-track {
-      background: #f3f4f6;
-      border-radius: 4px;
+    .status-active {
+      color: #4ade80;
+      border: 1px solid rgba(74, 222, 128, 0.3);
     }
 
-    ::-webkit-scrollbar-thumb {
-      background: #d1d5db;
-      border-radius: 4px;
+    .status-inactive {
+      color: #f87171;
+      border: 1px solid rgba(248, 113, 113, 0.3);
     }
 
-    ::-webkit-scrollbar-thumb:hover {
-      background: #9ca3af;
+    .transcript-link {
+      display: block;
+      margin-top: 20px;
+      padding: 15px;
+      background: rgba(40, 40, 40, 0.6);
+      border-radius: 8px;
+      border: 1px solid rgba(255, 255, 255, 0.1);
+      text-decoration: none;
+      color: #ffffff;
+      text-align: center;
+      transition: all 0.3s ease;
+    }
+
+    .transcript-link:hover {
+      transform: translateY(-2px);
+      box-shadow: 0 8px 25px rgba(157, 78, 221, 0.2);
+      border-color: rgba(157, 78, 221, 0.3);
+      background: linear-gradient(135deg, #9d4edd 0%, #c77dff 100%);
+    }
+
+    .transcript-link span {
+      font-size: 20px;
+      margin-right: 8px;
+    }
+
+    .transcript-link.disabled {
+      opacity: 0.5;
+      cursor: not-allowed;
+      transform: none;
+      pointer-events: none;
+      background: rgba(40, 40, 40, 0.6) !important;
+      border-color: rgba(255, 255, 255, 0.1) !important;
+    }
+
+    .mode-option.disabled {
+      opacity: 0.5;
+      cursor: not-allowed;
+      pointer-events: none;
     }
   </style>
 </head>
 
 <body>
-  <div>
+  <div class="container">
     <div class="header">
-      <div class="header-content">
-        <div class="header-text">
-          <h1>Meeting Transcripts</h1>
-          <p class="header-description">
-            Capture and manage your Google Meet transcripts
-          </p>
-        </div>
-      </div>
+      <h1 class="title">
+        <span>🎙️</span>
+        Meeting Transcript Pro
+      </h1>
+      <p class="description">Capture and manage your meeting transcripts with ease</p>
     </div>
 
-    <div class="main-content">
-      <div class="settings-panel">
-        <h2 class="panel-title">Settings</h2>
-        <div class="radio-item">
-          <input type="radio" name="mode" id="auto-mode" />
-          <label for="auto-mode">
-            <b>Auto mode</b>
-            <span class="sub-text">Get transcripts of all meetings automatically</span>
-          </label>
+    <div class="settings-panel">
+      <div class="mode-selection">
+        <div class="mode-option" id="auto-mode">
+          <input type="radio" name="mode" id="auto-radio" value="auto">
+          <div class="mode-content">
+            <div class="mode-label">Auto Mode 🚀</div>
+            <div class="mode-description">Automatically capture transcripts</div>
+          </div>
         </div>
-        <div class="radio-item">
-          <input type="radio" name="mode" id="manual-mode" />
-          <label for="manual-mode">
-            <b>Manual mode</b>
-            <span class="sub-text">Switch on transcript as needed using the CC icon</span>
-          </label>
+        <div class="mode-option" id="manual-mode">
+          <input type="radio" name="mode" id="manual-radio" value="manual">
+          <div class="mode-content">
+            <div class="mode-label">Manual Mode ⚡</div>
+            <div class="mode-description">Start/stop recording manually</div>
+          </div>
         </div>
-        <button class="btn btn-secondary" style="width: 100%; margin-top: 1rem;">
-          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-            <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm0 18c-4.41 0-8-3.59-8-8s3.59-8 8-8 8 3.59 8 8-3.59 8-8 8z"/>
-            <path d="M12 6v6l4 2"/>
-          </svg>
-          Set up webhooks
+      </div>
+
+      <div class="mode-status" id="modeStatus">Current Mode: Auto</div>
+
+      <div class="action-buttons">
+        <button id="toggleBtn" class="action-button">
+          <span>▶️</span>
+          Start
         </button>
-      </div>
-
-      <div class="transcript-history">
-        <h2 class="panel-title">Recent Transcripts</h2>
-        <div class="transcript-list" id="transcript-list">
-          <!-- Transcript items will be dynamically added here -->
-        </div>
-        <a href="transcripts.html" target="_blank" class="view-all">View All Transcripts</a>
+        <a href="https://github.com/Anvita004/transcriptpro" target="_blank" class="action-button" id="githubBtn">
+          <span>⭐</span>
+          GitHub
+        </a>
       </div>
     </div>
+
+    <a href="transcripts.html" class="transcript-link" id="transcriptLink">
+      <span>📚</span>
+      View All Transcripts
+    </a>
 
     <div class="footer">
       <div class="footer-links">
         <a href="#" class="footer-link">Help</a>
         <a href="#" class="footer-link">Report Issue</a>
       </div>
-      <div class="version">
-        <span id="version"></span>
-      </div>
+      <div class="version" id="version">Version 1.0.0</div>
     </div>
   </div>
 

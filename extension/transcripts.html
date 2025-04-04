@@ -5,145 +5,249 @@
     <title>Meeting Transcripts</title>
     <style>
         body {
-            font-family: Arial, sans-serif;
+            font-family: 'Inter', Arial, sans-serif;
             margin: 0;
             padding: 20px;
-            background-color: #f5f5f5;
+            background: linear-gradient(135deg, #1a1a1a 0%, #2a1a3a 100%);
+            color: #ffffff;
+            min-height: 100vh;
+        }
+        .main-container {
+            display: flex;
+            gap: 20px;
+            max-width: 1200px;
+            margin: 0 auto;
+        }
+        .sidebar {
+            width: 250px;
+            background: rgba(30, 30, 30, 0.8);
+            padding: 20px;
+            border-radius: 12px;
+            box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3);
+            backdrop-filter: blur(10px);
         }
         .container {
-            max-width: 800px;
-            margin: 0 auto;
-            background: white;
-            padding: 20px;
-            border-radius: 8px;
-            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+            flex: 1;
+            background: rgba(30, 30, 30, 0.8);
+            padding: 30px;
+            border-radius: 12px;
+            box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3);
+            backdrop-filter: blur(10px);
         }
         .header {
             display: flex;
             justify-content: space-between;
             align-items: center;
-            margin-bottom: 20px;
+            margin-bottom: 30px;
+            padding-bottom: 20px;
+            border-bottom: 1px solid rgba(255, 255, 255, 0.1);
         }
-        h1 {
+        h1, h2 {
             margin: 0;
-            color: #333;
+            color: #ffffff;
+            font-size: 28px;
+            background: linear-gradient(90deg, #9d4edd, #c77dff);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
         }
-        .button {
-            background-color: #4285F4;
-            color: white;
-            border: none;
-            padding: 8px 16px;
-            border-radius: 4px;
-            cursor: pointer;
-            margin-left: 10px;
-        }
-        .button:hover {
-            background-color: #357ABD;
-        }
-        .transcript-list {
-            margin-top: 20px;
-        }
-        .transcript-item {
-            background: #f8f9fa;
-            border: 1px solid #dee2e6;
-            border-radius: 4px;
-            padding: 15px;
+        h2 {
+            font-size: 20px;
             margin-bottom: 15px;
         }
+        .button {
+            background: linear-gradient(135deg, #9d4edd 0%, #c77dff 100%);
+            color: white;
+            border: none;
+            padding: 12px 24px;
+            border-radius: 8px;
+            cursor: pointer;
+            margin-left: 12px;
+            font-weight: 600;
+            transition: all 0.3s ease;
+            box-shadow: 0 4px 15px rgba(157, 78, 221, 0.3);
+        }
+        .button:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 6px 20px rgba(157, 78, 221, 0.4);
+        }
+        .transcript-list {
+            margin-top: 30px;
+        }
+        .transcript-item {
+            background: rgba(40, 40, 40, 0.6);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            border-radius: 8px;
+            padding: 20px;
+            margin-bottom: 20px;
+            transition: all 0.3s ease;
+        }
+        .transcript-item:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 8px 25px rgba(0, 0, 0, 0.2);
+            border-color: rgba(157, 78, 221, 0.3);
+        }
         .transcript-info {
-            margin-bottom: 10px;
+            margin-bottom: 15px;
         }
         .transcript-title {
             font-size: 1.2em;
             font-weight: bold;
-            margin-bottom: 5px;
+            margin-bottom: 8px;
+            color: #ffffff;
         }
         .transcript-date {
-            color: #666;
+            color: #b3b3b3;
             font-size: 0.9em;
-            margin-bottom: 5px;
+            margin-bottom: 8px;
         }
         .transcript-stats {
-            color: #666;
+            color: #b3b3b3;
             font-size: 0.9em;
         }
         .transcript-actions {
             display: flex;
-            gap: 10px;
+            gap: 12px;
         }
         .empty-state {
             text-align: center;
-            color: #666;
-            padding: 20px;
+            color: #b3b3b3;
+            padding: 40px 20px;
+            font-size: 1.1em;
         }
         .error-message {
-            background-color: #ffebee;
-            color: #c62828;
-            padding: 10px;
-            border-radius: 4px;
-            margin-bottom: 15px;
-        }
-        /* New styles for summary and Q&A */
-        .summary-section, .qa-section {
-            margin-top: 15px;
+            background-color: rgba(255, 0, 0, 0.1);
+            color: #ff6b6b;
             padding: 15px;
-            background: white;
-            border: 1px solid #e0e0e0;
-            border-radius: 4px;
-            display: none;
-        }
-        .qa-input {
-            display: flex;
-            gap: 10px;
-            margin-bottom: 10px;
-        }
-        .qa-input input {
-            flex: 1;
-            padding: 8px;
-            border: 1px solid #ddd;
-            border-radius: 4px;
-        }
-        .qa-options {
-            display: flex;
-            gap: 10px;
-            margin-bottom: 10px;
-        }
-        .qa-option {
-            padding: 5px 10px;
-            border: 1px solid #ddd;
-            border-radius: 4px;
-            cursor: pointer;
-        }
-        .qa-option.active {
-            background-color: #4285F4;
-            color: white;
-            border-color: #4285F4;
-        }
-        .qa-results {
-            margin-top: 10px;
-        }
-        .qa-result {
-            padding: 10px;
-            background: #f8f9fa;
-            border-radius: 4px;
-            margin-bottom: 5px;
+            border-radius: 8px;
+            margin-bottom: 20px;
+            border: 1px solid rgba(255, 0, 0, 0.2);
         }
         .loading {
             text-align: center;
-            color: #666;
+            color: #b3b3b3;
+            padding: 20px;
+        }
+        .loading::after {
+            content: "";
+            display: inline-block;
+            width: 20px;
+            height: 20px;
+            margin-left: 20px;
+            border: 3px solid rgba(157, 78, 221, 0.3);
+            border-radius: 50%;
+            border-top-color: #9d4edd;
+            animation: spin 1s ease-in-out infinite;
+        }
+        @keyframes spin {
+            to { transform: rotate(360deg); }
+        }
+        /* Sidebar styles */
+        .sidebar-section {
+            margin-bottom: 25px;
+        }
+        .filter-options {
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+        }
+        .filter-option {
             padding: 10px;
+            background: rgba(40, 40, 40, 0.6);
+            border-radius: 8px;
+            cursor: pointer;
+            transition: all 0.3s ease;
+        }
+        .filter-option:hover {
+            background: rgba(157, 78, 221, 0.2);
+        }
+        .filter-option.active {
+            background: linear-gradient(135deg, #9d4edd 0%, #c77dff 100%);
+        }
+        .action-buttons {
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+        }
+        /* Q&A Section Styles */
+        .qa-container {
+            margin-top: 20px;
+            padding: 20px;
+            background: rgba(40, 40, 40, 0.6);
+            border-radius: 12px;
+            border: 1px solid rgba(157, 78, 221, 0.2);
+        }
+        .qa-input-container {
+            display: flex;
+            gap: 10px;
+            margin-bottom: 15px;
+        }
+        .qa-input-field {
+            flex: 1;
+            padding: 12px 20px;
+            border-radius: 8px;
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            background: rgba(30, 30, 30, 0.8);
+            color: white;
+            font-size: 16px;
+            transition: all 0.3s ease;
+        }
+        .qa-input-field:focus {
+            outline: none;
+            border-color: #9d4edd;
+            box-shadow: 0 0 0 2px rgba(157, 78, 221, 0.2);
+        }
+        .qa-input-field::placeholder {
+            color: rgba(255, 255, 255, 0.5);
+        }
+        .qa-search-btn {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            padding: 12px 24px;
+            background: linear-gradient(135deg, #9d4edd 0%, #c77dff 100%);
+            border: none;
+            border-radius: 8px;
+            color: white;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.3s ease;
+        }
+        .qa-search-btn:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 6px 20px rgba(157, 78, 221, 0.4);
+        }
+        .search-icon {
+            font-size: 18px;
+        }
+        .qa-results {
+            margin-top: 20px;
+        }
+        .qa-result {
+            background: rgba(30, 30, 30, 0.8);
+            padding: 15px;
+            border-radius: 8px;
+            margin-bottom: 10px;
+            border: 1px solid rgba(255, 255, 255, 0.1);
+        }
+        .qa-result strong {
+            color: #9d4edd;
         }
     </style>
 </head>
 <body>
-    <div class="container">
-        <h1>Meeting Transcripts</h1>
-        <div class="header">
-            <button id="refreshButton" class="button">Refresh</button>
-            <button id="downloadAllButton" class="button">Download All</button>
-        </div>
-        <div id="transcript-list">
-            <div class="empty-state">Loading transcripts...</div>
+    <div class="main-container">
+        <!-- Main Content -->
+        <div class="container">
+            <div class="header">
+                <h1>Meeting Transcripts</h1>
+                <div class="action-buttons">
+                    <button id="downloadAllButton" class="button">Download All</button>
+                    <button id="refreshButton" class="button">Refresh</button>
+                </div>
+            </div>
+            <div id="transcript-list">
+                <div class="empty-state">Loading transcripts...</div>
+            </div>
         </div>
     </div>
     <script src="transcripts.js"></script>

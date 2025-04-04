@@ -1,3 +1,10 @@
+// Add this at the very top of the file
+if (window.hasTranscriptProContentScript) {
+    console.log("Transcript Pro content script already running, skipping initialization");
+    return;
+}
+window.hasTranscriptProContentScript = true;
+
 // Attempt to recover last meeting, if any. Abort if it takes more than 1 second to prevent current meeting getting messed up.
 Promise.race([
   recoverLastMeeting(),
@@ -53,45 +60,54 @@ let hasMeetingStarted = false
 // Capture meeting end to suppress any errors
 let hasMeetingEnded = false
 
-let extensionStatusJSON
+let extensionStatusJSON = {
+  status: 200,
+  message: "<strong>Transcript capture started</strong> <br /> The transcript will be automatically downloaded when the meeting ends."
+}
 
 let canUseAriaBasedTranscriptSelector = true
+
+let transcriptObserver = null;
+let chatMessagesObserver = null;
+
+let isExtensionActive = true;
 
 //*********** MAIN FUNCTIONS **********//
 checkExtensionStatus().then(() => {
   // Read the status JSON
-  chrome.storage.local.get(["extensionStatusJSON"], function (result) {
-    extensionStatusJSON = result.extensionStatusJSON
-    console.log("Extension status " + extensionStatusJSON.status)
+  chrome.storage.local.get(["extensionStatusJSON", "isActive"], function (result) {
+    extensionStatusJSON = result.extensionStatusJSON || extensionStatusJSON
+    isExtensionActive = result.isActive !== false; // Default to true if not set
+    console.log("Extension status " + extensionStatusJSON.status + ", Active: " + isExtensionActive)
 
-    // Enable extension functions only if status is 200
-    if (extensionStatusJSON.status == 200) {
-      // NON CRITICAL DOM DEPENDENCY. Attempt to get username before meeting starts. Abort interval if valid username is found or if meeting starts and default to "You".
-      waitForElement(".awLEm").then(() => {
-        // Poll the element until the textContent loads from network or until meeting starts
-        const captureUserNameInterval = setInterval(() => {
-          const captureUserName = document.querySelector(".awLEm").textContent
-          if (captureUserName != "") {
-            userName = captureUserName
-            clearInterval(captureUserNameInterval)
-          }
-        }, 100)
-      })
-
-      // 1. Meet UI prior to July/Aug 2024
-      // meetingRoutines(1)
-
-      // 2. Meet UI post July/Aug 2024
-      meetingRoutines(2)
+    // If extension is not active, ensure all operations are stopped
+    if (!isExtensionActive) {
+      stopAllOperations()
+      return
     }
-    else {
+
+    // Only start if extension is active and status is 200
+    if (extensionStatusJSON.status == 200) {
+      // Check if observers are already running
+      if (transcriptObserver || chatMessagesObserver) {
+        console.log("Observers already running, skipping initialization")
+        return
+      }
+      meetingRoutines(2)
+    } else {
       // Show downtime message as extension status is 400
       showNotification(extensionStatusJSON)
+      stopAllOperations()
     }
   })
 })
 
 function meetingRoutines(uiType) {
+  if (!isExtensionActive) {
+    console.log("Extension is not active, skipping meeting routines")
+    return
+  }
+
   const meetingEndIconData = {
     selector: "",
     text: ""
@@ -125,13 +141,9 @@ function meetingRoutines(uiType) {
     })
     hasMeetingStarted = true
 
-
     //*********** MEETING START ROUTINES **********//
     // Pick up meeting name after a delay, since Google meet updates meeting name after a delay
     setTimeout(() => updateMeetingTitle(), 5000)
-
-    let transcriptObserver
-    let chatMessagesObserver
 
     // **** REGISTER TRANSCRIPT LISTENER **** //
     try {
@@ -160,40 +172,34 @@ function meetingRoutines(uiType) {
         ? transcriptTargetNode.setAttribute("style", "opacity:0.2")
         : transcriptTargetNode.childNodes[1].setAttribute("style", "opacity:0.2")
 
-      // Create transcript observer instance linked to the callback function. Registered irrespective of operation mode, so that any visible transcript can be picked up during the meeting, independent of the operation mode.
+      // Create transcript observer instance linked to the callback function
       transcriptObserver = new MutationObserver(transcriptMutationCallback)
 
-      // Start observing the transcript element and chat messages element for configured mutations
+      // Start observing the transcript element
       transcriptObserver.observe(transcriptTargetNode, mutationConfig)
     } catch (err) {
       console.error(err)
       isTranscriptDomErrorCaptured = true
       showNotification(extensionStatusJSON_bug)
-
       logError("001", err)
     }
 
     // **** REGISTER CHAT MESSAGES LISTENER **** //
     try {
       const chatMessagesButton = selectElements(".google-symbols", "chat")[0]
-      // Force open chat messages to make the required DOM to appear. Otherwise, the required chatMessages DOM element is not available.
+      // Force open chat messages to make the required DOM to appear
       chatMessagesButton.click()
 
       // Allow DOM to be updated and then register chatMessage mutation observer
       waitForElement(`div[aria-live="polite"].Ge9Kpc`).then(() => {
         chatMessagesButton.click()
-        // CRITICAL DOM DEPENDENCY. Grab the chat messages element. This element is present, irrespective of chat ON/OFF, once it appears for this first time.
         try {
           const chatMessagesTargetNode = document.querySelector(`div[aria-live="polite"].Ge9Kpc`)
-
-          // Create chat messages observer instance linked to the callback function. Registered irrespective of operation mode.
           chatMessagesObserver = new MutationObserver(chatMessagesMutationCallback)
-
           chatMessagesObserver.observe(chatMessagesTargetNode, mutationConfig)
         } catch (err) {
           console.error(err)
           showNotification(extensionStatusJSON_bug)
-
           logError("002", err)
         }
       })
@@ -201,15 +207,14 @@ function meetingRoutines(uiType) {
       console.error(err)
       isChatMessagesDomErrorCaptured = true
       showNotification(extensionStatusJSON_bug)
-
       logError("003", err)
     }
 
-    // Show confirmation message from extensionStatusJSON, once observation has started, based on operation mode
+    // Show confirmation message based on operation mode
     if (!isTranscriptDomErrorCaptured && !isChatMessagesDomErrorCaptured) {
       chrome.storage.sync.get(["operationMode"], function (result) {
         if (result.operationMode == "manual") {
-          showNotification({ status: 400, message: "<strong>Meeting Transcript Pro is not running</strong> <br /> Turn on captions using the CC icon, if needed" })
+          showNotification({ status: 400, message: "<strong>Transcript capture is not running</strong> <br /> Turn on captions using the CC icon, if needed" })
         }
         else {
           showNotification(extensionStatusJSON)
@@ -242,532 +247,337 @@ function meetingRoutines(uiType) {
 
       logError("004", err)
     }
-  })
+  }
 }
-
-
-
-
 
 //*********** CALLBACK FUNCTIONS **********//
-// Callback function to execute when transcription mutations are observed. 
-function transcriptMutationCallback(mutationsList, observer) {
-  try {
-    // Get the transcript container
-    const transcriptContainer = canUseAriaBasedTranscriptSelector 
-      ? document.querySelector('div[role="region"][tabindex="0"]')
-      : document.querySelector('.a4cQT');
-
-    if (!transcriptContainer) {
-      console.log('Transcript container not found');
-      return;
-    }
-
-    // Get all transcript blocks
-    const transcriptBlocks = transcriptContainer.querySelectorAll('.nMcdL');
-    let hasNewTranscript = false;
-
-    transcriptBlocks.forEach(block => {
-      const speakerElement = block.querySelector('.KcIKyf');
-      const textElement = block.querySelector('.bh44bd');
-      
-      if (speakerElement && textElement) {
-        const speaker = speakerElement.textContent.trim();
-        const text = textElement.textContent.trim();
-        const timestamp = new Date().toISOString();
-
-        // Add to transcript array if not already present
-        if (!transcript.some(t => t.personName === speaker && t.transcriptText === text)) {
-          transcript.push({
-            personName: speaker,
-            transcriptText: text,
-            timestamp
-          });
-          hasNewTranscript = true;
-        }
-      }
-    });
-
-    // Only save to storage if we have new transcript content
-    if (hasNewTranscript) {
-      overWriteChromeStorage(["transcript"], false);
-    }
-  } catch (error) {
-    console.error('Error in transcript mutation callback:', error);
-    if (!isTranscriptDomErrorCaptured) {
-      isTranscriptDomErrorCaptured = true;
-      showNotification(extensionStatusJSON_bug);
-      logError("002", error);
-    }
+// Function to handle transcript mutations
+function transcriptMutationCallback(mutations) {
+  if (!isExtensionActive) {
+    console.log("Extension is not active, skipping transcript capture")
+    return
   }
-}
-
-// Callback function to execute when chat messages mutations are observed. 
-function chatMessagesMutationCallback(mutationsList, observer) {
-  try {
-    const chatContainer = document.querySelector('div[aria-live="polite"].Ge9Kpc');
-    if (!chatContainer) {
-      console.log('Chat container not found');
-      return;
-    }
-
-    const messageElements = chatContainer.querySelectorAll('.QTyiie');
-    let hasNewMessages = false;
-
-    messageElements.forEach(message => {
-      const senderElement = message.querySelector('.poVWob');
-      const textElement = message.querySelector('div[jscontroller="RrV5Ic"]');
-      const timeElement = message.querySelector('.MuzmKe');
-      
-      if (senderElement && textElement) {
-        const sender = senderElement.textContent.trim();
-        const text = textElement.textContent.trim();
-        const timestamp = new Date().toISOString();
-
-        // Add to chat messages array if not already present
-        if (!chatMessages.some(m => m.personName === sender && m.messageText === text)) {
-          chatMessages.push({
-            personName: sender,
-            messageText: text,
-            timestamp
-          });
-          hasNewMessages = true;
-        }
-      }
-    });
-
-    // Only save to storage if we have new messages
-    if (hasNewMessages) {
-      overWriteChromeStorage(["chatMessages"], false);
-    }
-  } catch (error) {
-    console.error('Error in chat messages mutation callback:', error);
-    if (!isChatMessagesDomErrorCaptured) {
-      isChatMessagesDomErrorCaptured = true;
-      showNotification(extensionStatusJSON_bug);
-      logError("003", error);
-    }
-  }
-}
-
-
-
-
-
-
-
-
-
-
-//*********** HELPER FUNCTIONS **********//
-// Pushes data in the buffer to transcript array as a transcript block
-function pushBufferToTranscript() {
-  transcript.push({
-    "personName": personNameBuffer === "You" ? userName : personNameBuffer,
-    "timestamp": timestampBuffer,
-    "transcriptText": transcriptTextBuffer
-  })
-  overWriteChromeStorage(["transcript"], false)
-}
-
-// Pushes object to array only if it doesn't already exist. chatMessage is checked for substring since some trailing text(keep Pin message) is present from a button that allows to pin the message.
-function pushUniqueChatBlock(chatBlock) {
-  const isExisting = chatMessages.some(item =>
-    item.personName == chatBlock.personName &&
-    chatBlock.chatMessageText.includes(item.chatMessageText)
-  )
-  if (!isExisting) {
-    console.log(chatBlock)
-    chatMessages.push(chatBlock)
-    overWriteChromeStorage(["chatMessages"], false)
-  }
-}
-
-// Saves specified variables to chrome storage. Optionally, can send message to background script to download, post saving.
-function overWriteChromeStorage(keys, sendDownloadMessage) {
-  const objectToSave = {}
-  // Hard coded list of keys that are accepted
-  if (keys.includes("transcript"))
-    objectToSave.transcript = transcript
-  if (keys.includes("meetingTitle"))
-    objectToSave.meetingTitle = meetingTitle
-  if (keys.includes("meetingStartTimestamp"))
-    objectToSave.meetingStartTimestamp = meetingStartTimestamp
-  if (keys.includes("chatMessages"))
-    objectToSave.chatMessages = chatMessages
-
-  chrome.storage.local.set(objectToSave, function () {
-    if (sendDownloadMessage) {
-      chrome.runtime.sendMessage({ type: "meeting_ended" }, function (response) {
-        console.log(response)
-      })
-    }
-  })
-}
-
-// Grabs updated meeting title, if available
-function updateMeetingTitle() {
-  try {
-    // NON CRITICAL DOM DEPENDENCY
-    meetingTitle = document.querySelector(".u6vdEc").textContent
-    overWriteChromeStorage(["meetingTitle"], false)
-  } catch (err) {
-    console.error(err)
-
-    if (!hasMeetingEnded) {
-      logError("007", err)
-    }
-  }
-}
-
-// Returns all elements of the specified selector type and specified textContent. Return array contains the actual element as well as all the upper parents. 
-function selectElements(selector, text) {
-  var elements = document.querySelectorAll(selector)
-  return Array.prototype.filter.call(elements, function (element) {
-    return RegExp(text).test(element.textContent)
-  })
-}
-
-// Efficiently waits until the element of the specified selector and textContent appears in the DOM. Polls only on animation frame change
-const waitForElement = async (selector, text) => {
-  if (text) {
-    // loops for every animation frame change, until the required element is found
-    while (!Array.from(document.querySelectorAll(selector)).find(element => element.textContent === text)) {
-      await new Promise((resolve) => requestAnimationFrame(resolve))
-    }
-  }
-  else {
-    // loops for every animation frame change, until the required element is found
-    while (!document.querySelector(selector)) {
-      await new Promise((resolve) => requestAnimationFrame(resolve))
-    }
-  }
-  return document.querySelector(selector)
-}
-
-// Shows a responsive notification of specified type and message
-function showNotification(extensionStatusJSON) {
-  // Banner CSS
-  let html = document.querySelector("html")
-  let obj = document.createElement("div")
-  let logo = document.createElement("img")
-  let text = document.createElement("p")
-
-  logo.setAttribute(
-    "src",
-    "https://ejnana.github.io/transcripto-status/icon.png"
-  )
-  logo.setAttribute("height", "32px")
-  logo.setAttribute("width", "32px")
-  logo.style.cssText = "border-radius: 4px"
-
-  // Remove banner after 5s
-  setTimeout(() => {
-    obj.style.display = "none"
-  }, 5000)
-
-  if (extensionStatusJSON.status == 200) {
-    obj.style.cssText = `color: #2A9ACA; ${commonCSS}`
-    text.innerHTML = extensionStatusJSON.message
-  }
-  else {
-    obj.style.cssText = `color: orange; ${commonCSS}`
-    text.innerHTML = extensionStatusJSON.message
-  }
-
-  obj.prepend(text)
-  obj.prepend(logo)
-  if (html)
-    html.append(obj)
-}
-
-// CSS for notification
-const commonCSS = `background: rgb(255 255 255 / 10%); 
-    backdrop-filter: blur(16px); 
-    position: fixed;
-    top: 5%; 
-    left: 0; 
-    right: 0; 
-    margin-left: auto; 
-    margin-right: auto;
-    max-width: 780px;  
-    z-index: 1000; 
-    padding: 0rem 1rem;
-    border-radius: 8px; 
-    display: flex; 
-    justify-content: center; 
-    align-items: center; 
-    gap: 16px;  
-    font-size: 1rem; 
-    line-height: 1.5; 
-    font-family: "Google Sans",Roboto,Arial,sans-serif; 
-    box-shadow: rgba(0, 0, 0, 0.16) 0px 10px 36px 0px, rgba(0, 0, 0, 0.06) 0px 0px 0px 1px;`
-
-
-// Logs anonymous errors to a Google sheet for swift debugging   
-function logError(code, err) {
-  fetch(`https://script.google.com/macros/s/AKfycbxiyQSDmJuC2onXL7pKjXgELK1vA3aLGZL5_BLjzCp7fMoQ8opTzJBNfEHQX_QIzZ-j4Q/exec?version=${chrome.runtime.getManifest().version}&code=${code}&error=${encodeURIComponent(err)}`, { mode: "no-cors" })
-}
-
-
-// Fetches extension status from GitHub and saves to chrome storage. Defaults to 200, if remote server is unavailable.
-async function checkExtensionStatus() {
-  // Set default value as 200
-  chrome.storage.local.set({
-    extensionStatusJSON: { status: 200, message: "<strong>Meeting Transcript Pro is running</strong> <br /> Do not turn off captions" },
-  })
-
-  // https://stackoverflow.com/a/42518434
-  await fetch(
-    "https://ejnana.github.io/transcripto-status/status-prod.json",
-    { cache: "no-store" }
-  )
-    .then((response) => response.json())
-    .then((result) => {
-      // Write status to chrome local storage
-      chrome.storage.local.set({ extensionStatusJSON: result }, function () {
-        console.log("Extension status fetched and saved")
-      })
-    })
-    .catch((err) => {
-      console.error(err)
-
-      logError("008", err)
-    })
-}
-
-function recoverLastMeeting() {
-  return new Promise((resolve, reject) => {
-    chrome.storage.local.get(["meetings", "meetingStartTimestamp", "meetingStartTimeStamp"], function (result) {
-      // Check if user ever attended a meeting
-      // Backward compatible chrome storage variable. Old name "meetingStartTimeStamp". 
-      if (result.meetingStartTimestamp || result.meetingStartTimeStamp) {
-        if (result.meetings && (result.meetings.length > 0)) {
-          const meetingToDownload = result.meetings[result.meetings.length - 1]
-
-          // Last meeting was not processed for some reason. Need to recover that data, process and download it.
-          if (result.meetingStartTimestamp !== meetingToDownload.meetingStartTimestamp) {
-            // Silent failure if last meeting is an empty meeting
-            chrome.runtime.sendMessage({
-              type: "recover_last_meeting",
-            }, function (response) {
-              if (response.success) {
-                resolve()
-                return
-              }
-              else {
-                resolve("Could not recover. Last meeting was likely empty.")
-                return
-              }
-            })
-          }
-          else {
-            resolve("No recovery needed")
-          }
-        }
-        // First meeting itself ended in a disaster. Need to recover that data, process and download it. Also handle recoveries of versions where "meetingStartTimeStamp" was used, because result.meetings will always be undefined in those versions.
-        else {
-          chrome.runtime.sendMessage({
-            type: "recover_last_meeting",
-          }, function (response) {
-            if (response.success) {
-              resolve()
-              return
-            }
-            else {
-              reject("Could not recover. Last meeting was likely empty.")
-              return
-            }
-          })
-        }
-      }
-    })
-  })
-}
-
-// Function to capture transcript data
-function captureTranscript() {
     try {
         // Get the transcript container
-        const transcriptContainer = document.querySelector('div[role="region"][tabindex="0"]') || document.querySelector('.a4cQT');
+        const transcriptContainer = document.querySelector(`div[role="region"][tabindex="0"]`) || document.querySelector(".a4cQT");
         if (!transcriptContainer) {
-            console.log('Transcript container not found');
+            console.log("Transcript container not found");
             return;
         }
 
         // Get all transcript blocks
         const transcriptBlocks = transcriptContainer.querySelectorAll('.nMcdL');
+        let hasNewTranscript = false;
+
         transcriptBlocks.forEach(block => {
             const speakerElement = block.querySelector('.KcIKyf');
             const textElement = block.querySelector('.bh44bd');
-            
+
             if (speakerElement && textElement) {
-                const speaker = speakerElement.textContent;
-                const text = textElement.textContent;
-                const timestamp = new Date().toISOString();
+                const speaker = speakerElement.textContent.trim();
+                const text = textElement.textContent.trim();
+                const timestamp = Date.now();
 
                 // Add to transcript array if not already present
-                if (!transcript.some(t => t.speaker === speaker && t.text === text)) {
+                if (!transcript.some(t => t.personName === speaker && t.transcriptText === text)) {
                     transcript.push({
-                        speaker,
-                        text,
-                        timestamp
+                        personName: speaker,
+                        transcriptText: text,
+                        timestamp: timestamp
                     });
-                    // Save to storage
-                    overWriteChromeStorage(["transcript"], false);
+                    hasNewTranscript = true;
                 }
             }
         });
+
+        // Only save to storage if we have new transcript content
+        if (hasNewTranscript) {
+            chrome.storage.local.set({ transcript: transcript }, function() {
+                console.log("Transcript saved to storage:", transcript.length, "entries");
+            });
+        }
     } catch (error) {
-        console.error('Error capturing transcript:', error);
+        console.error("Error in transcript mutation callback:", error);
+        if (!isTranscriptDomErrorCaptured) {
+            isTranscriptDomErrorCaptured = true;
+            showNotification(extensionStatusJSON_bug);
+        }
     }
 }
 
-// Function to capture chat messages
-function captureChatMessages() {
+// Function to handle chat message mutations
+function chatMessagesMutationCallback(mutations) {
+  if (!isExtensionActive) {
+    console.log("Extension is not active, skipping chat message capture")
+    return
+  }
     try {
-        const chatContainer = document.querySelector('div[aria-live="polite"].Ge9Kpc');
+        // Get the chat container
+        const chatContainer = document.querySelector(`div[aria-live="polite"].Ge9Kpc`);
         if (!chatContainer) {
-            console.log('Chat container not found');
+            console.log("Chat container not found");
             return;
         }
 
-        const chatMessages = chatContainer.querySelectorAll('.QTyiie');
-        chatMessages.forEach(message => {
+        // Get all chat message elements
+        const messageElements = chatContainer.querySelectorAll('.QTyiie');
+        let hasNewMessages = false;
+
+        messageElements.forEach(message => {
             const senderElement = message.querySelector('.poVWob');
             const textElement = message.querySelector('div[jscontroller="RrV5Ic"]');
             
             if (senderElement && textElement) {
-                const sender = senderElement.textContent;
-                const text = textElement.textContent;
-                const timestamp = new Date().toISOString();
+                const sender = senderElement.textContent.trim();
+                const text = textElement.textContent.trim();
+                const timestamp = Date.now();
 
                 // Add to chat messages array if not already present
-                if (!chatMessages.some(m => m.sender === sender && m.text === text)) {
+                if (!chatMessages.some(m => m.personName === sender && m.chatMessageText === text)) {
                     chatMessages.push({
-                        sender,
-                        text,
-                        timestamp
+                        personName: sender,
+                        chatMessageText: text,
+                        timestamp: timestamp
                     });
-                    // Save to storage
-                    overWriteChromeStorage(["chatMessages"], false);
+                    hasNewMessages = true;
                 }
             }
         });
+
+        // Only save to storage if we have new messages
+        if (hasNewMessages) {
+            chrome.storage.local.set({ chatMessages: chatMessages }, function() {
+                console.log("Chat messages saved to storage:", chatMessages.length, "entries");
+            });
+        }
     } catch (error) {
-        console.error('Error capturing chat messages:', error);
+        console.error("Error in chat messages mutation callback:", error);
+        if (!isChatMessagesDomErrorCaptured) {
+            isChatMessagesDomErrorCaptured = true;
+            showNotification(extensionStatusJSON_bug);
+        }
     }
 }
 
-// Set up observers to capture transcript and chat messages
-const transcriptObserver = new MutationObserver(() => {
-    captureTranscript();
-});
-
-const chatObserver = new MutationObserver(() => {
-    captureChatMessages();
-});
-
-// Start observing when meeting starts
-function startObserving() {
-    const transcriptContainer = document.querySelector('div[role="region"][tabindex="0"]') || document.querySelector('.a4cQT');
-    const chatContainer = document.querySelector('div[aria-live="polite"].Ge9Kpc');
-
-    if (transcriptContainer) {
-        transcriptObserver.observe(transcriptContainer, { childList: true, subtree: true, characterData: true });
-    }
-
-    if (chatContainer) {
-        chatObserver.observe(chatContainer, { childList: true, subtree: true, characterData: true });
-    }
-
-    // Save initial meeting data
-    chrome.storage.local.set({
-        meetingStartTimestamp: Date.now(),
-        meetingTitle: document.title
+// Function to save data to chrome storage
+function overWriteChromeStorage(keys, isMeetingEnd) {
+    const data = {};
+    
+    keys.forEach(key => {
+        switch(key) {
+            case "transcript":
+                data.transcript = transcript;
+                break;
+            case "chatMessages":
+                data.chatMessages = chatMessages;
+                break;
+            case "meetingStartTimestamp":
+                data.meetingStartTimestamp = meetingStartTimestamp;
+                break;
+            case "meetingTitle":
+                data.meetingTitle = meetingTitle;
+                break;
+        }
+    });
+    
+    chrome.storage.local.set(data, function() {
+        console.log("Data saved to storage:", keys);
+        
+        if (isMeetingEnd) {
+            // Ensure all data is saved before sending the meeting ended message
+            setTimeout(() => {
+                chrome.runtime.sendMessage({ type: "meeting_ended" }, function(response) {
+                    console.log("Meeting ended message sent:", response);
+                });
+            }, 1000);
+        }
     });
 }
 
-// Listen for meeting start
-chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
-    if (message.type === 'new_meeting_started') {
-        startObserving();
-        sendResponse({ success: true });
+//*********** HELPER FUNCTIONS **********//
+function checkExtensionStatus() {
+  return new Promise((resolve) => {
+    chrome.storage.local.get(["extensionStatusJSON"], function (result) {
+      if (!result.extensionStatusJSON) {
+        chrome.storage.local.set({ extensionStatusJSON: extensionStatusJSON }, function () {
+          console.log("Extension status set to 200")
+          resolve()
+        })
+      }
+      else {
+        resolve()
+      }
+    })
+  })
+}
+
+function waitForElement(selector, text) {
+  return new Promise((resolve) => {
+    if (document.querySelector(selector)) {
+      if (text) {
+        const elements = selectElements(selector, text)
+        if (elements.length > 0) {
+          resolve(elements[0])
+        }
+        else {
+          const interval = setInterval(() => {
+            const elements = selectElements(selector, text)
+            if (elements.length > 0) {
+              clearInterval(interval)
+              resolve(elements[0])
+            }
+          }, 100)
+        }
+      }
+      else {
+        resolve(document.querySelector(selector))
+      }
     }
-    return true;
+    else {
+      const interval = setInterval(() => {
+        if (document.querySelector(selector)) {
+          clearInterval(interval)
+          if (text) {
+            const elements = selectElements(selector, text)
+            if (elements.length > 0) {
+              resolve(elements[0])
+            }
+          }
+          else {
+            resolve(document.querySelector(selector))
+          }
+        }
+      }, 100)
+    }
+  })
+}
+
+function selectElements(selector, text) {
+  const elements = document.querySelectorAll(selector)
+  return Array.from(elements).filter(element => element.textContent.trim() === text)
+}
+
+function pushBufferToTranscript() {
+  if (personNameBuffer && transcriptTextBuffer && timestampBuffer) {
+  transcript.push({
+      personName: personNameBuffer,
+      transcriptText: transcriptTextBuffer,
+      timestamp: timestampBuffer
+    })
+
+    // Clear buffers
+    personNameBuffer = ""
+    transcriptTextBuffer = ""
+    timestampBuffer = undefined
+
+    // Save to chrome storage
+  overWriteChromeStorage(["transcript"], false)
+  }
+}
+
+function updateMeetingTitle() {
+  meetingTitle = document.title
+    overWriteChromeStorage(["meetingTitle"], false)
+}
+
+function showNotification(extensionStatusJSON) {
+  const notification = document.createElement("div")
+  notification.style.cssText = `
+    position: fixed;
+    top: 20px;
+    right: 20px;
+    padding: 10px;
+    background-color: ${extensionStatusJSON.status == 200 ? "#4CAF50" : "#f44336"};
+    color: white;
+    border-radius: 4px;
+    z-index: 9999;
+    max-width: 300px;
+    font-family: Arial, sans-serif;
+  `
+  notification.innerHTML = extensionStatusJSON.message
+  document.body.appendChild(notification)
+
+  setTimeout(() => {
+    notification.remove()
+  }, 5000)
+}
+
+function logError(errorCode, error) {
+  console.error(`Error ${errorCode}:`, error)
+  // You can add error reporting logic here
+}
+
+function recoverLastMeeting() {
+  return new Promise((resolve) => {
+    chrome.storage.local.get(["transcript", "chatMessages"], function (result) {
+      if (result.transcript && result.transcript.length > 0) {
+        transcript = result.transcript
+        chatMessages = result.chatMessages || []
+        chrome.runtime.sendMessage({ type: "recover_last_meeting" }, function (response) {
+          console.log(response)
+                resolve()
+            })
+          }
+          else {
+              resolve()
+      }
+    })
+  })
+}
+
+// Function to stop all operations
+function stopAllOperations() {
+    console.log("Stopping all operations");
+    isExtensionActive = false;
+    
+    // Disconnect and nullify observers
+    if (transcriptObserver) {
+        transcriptObserver.disconnect();
+        transcriptObserver = null;
+    }
+    if (chatMessagesObserver) {
+        chatMessagesObserver.disconnect();
+        chatMessagesObserver = null;
+    }
+    
+    // Clear all data
+    transcript = [];
+    chatMessages = [];
+    
+    // Clear storage
+    chrome.storage.local.set({ 
+        transcript: [], 
+        chatMessages: [],
+        isActive: false 
+    }, function() {
+        console.log("All operations stopped and data cleared");
+    });
+}
+
+// Function to start all operations
+function startAllOperations() {
+    console.log("Starting all operations");
+    
+    // If observers are already running, don't start again
+    if (transcriptObserver || chatMessagesObserver) {
+        console.log("Observers already running, skipping start");
+        return;
+    }
+    
+    isExtensionActive = true;
+    chrome.storage.local.set({ isActive: true }, function() {
+        meetingRoutines(2);
+    });
+}
+
+// Listen for extension state changes
+chrome.storage.onChanged.addListener(function(changes, namespace) {
+    if (namespace === 'local' && changes.isActive) {
+        console.log("Extension active state changed to:", changes.isActive.newValue);
+        if (!changes.isActive.newValue) {
+            stopAllOperations();
+        } else {
+            startAllOperations();
+        }
+    }
 });
-
-// CURRENT GOOGLE MEET TRANSCRIPT DOM. TO BE UPDATED.
-
-{/* <div class="a4cQT kV7vwc eO2Zfd" jscontroller="D1tHje" jsaction="bz0DVc:HWTqGc;E18dRb:lUFH9b;QBUr8:lUFH9b;stc2ve:oh3Xke" style="">
-  // CAPTION LANGUAGE SETTINGS. MAY OR MAY NOT HAVE CHILDREN
-  <div class="NmXUuc  P9KVBf" jscontroller="rRafu" jsaction="F41Sec:tsH52e;OmFrlf:xfAI6e(zHUIdd)"></div>
-  <div class="DtJ7e">
-    <span class="frX3lc-vlkzWd  P9KVBf"></span>
-    <div jsname="dsyhDe" class="iOzk7 uYs2ee " style="">
-      //PERSON 1
-      <div class="nMcdL bj4p3b" style="">
-        <div class="adE6rb M6cG9d">
-          <img alt="" class="Z6byG r6DyN" src="https://lh3.googleusercontent.com/a/some-url" data-iml="63197.699999999255">
-            <div class="KcIKyf jxFHg">Person 1</div>
-        </div>
-        <div jsname="YSxPC" class="bYevke wY1pdd" style="height: 27.5443px;">
-          <div jsname="tgaKEf" class="bh44bd VbkSUe">
-            <span>Some transcript text.</span>
-            <span>Some more text.</span></div>
-        </div>
-      </div>
-      //PERSON 2
-      <div class="nMcdL bj4p3b" style="">
-        <div class="adE6rb M6cG9d">
-          <img alt="" class="Z6byG r6DyN" src="https://lh3.googleusercontent.com/a/some-url" data-iml="63197.699999999255">
-            <div class="KcIKyf jxFHg">Person 2</div>
-        </div>
-        <div jsname="YSxPC" class="bYevke wY1pdd" style="height: 27.5443px;">
-          <div jsname="tgaKEf" class="bh44bd VbkSUe">
-            <span>Some transcript text.</span>
-            <span>Some more text.</span></div>
-        </div>
-      </div>
-    </div>
-    <div jsname="APQunf" class="iOzk7 uYs2ee" style="display: none;">
-    </div>
-  </div>
-  <div jscontroller="mdnBv" jsaction="stc2ve:MO88xb;QBUr8:KNou4c">
-  </div>
-</div> */}
-
-// CURRENT GOOGLE MEET CHAT MESSAGES DOM
-{/* <div jsname="xySENc" aria-live="polite" jscontroller="Mzzivb" jsaction="nulN2d:XL2g4b;vrPT5c:XL2g4b;k9UrDc:ClCcUe"
-  class="Ge9Kpc z38b6">
-  <div class="Ss4fHf" jsname="Ypafjf" tabindex="-1" jscontroller="LQRnv"
-    jsaction="JIbuQc:sCzVOd(aUCive),T4Iwcd(g21v4c),yyLnsd(iJEnyb),yFT8A(RNMM1e),Cg1Rgf(EZbOH)" style="order: 0;">
-    <div class="QTyiie">
-      <div class="poVWob">You</div>
-      <div jsname="biJjHb" class="MuzmKe">17:00</div>
-    </div>
-    <div class="beTDc">
-      <div class="er6Kjc chmVPb">
-        <div class="ptNLrf">
-          <div jsname="dTKtvb">
-            <div jscontroller="RrV5Ic" jsaction="rcuQ6b:XZyPzc" data-is-tv="false">Hello</div>
-          </div>
-          <div class="pZBsfc">Hover over a message to pin it<i class="google-material-icons VfPpkd-kBDsod WRc1Nb"
-              aria-hidden="true">keep</i></div>
-          <div class="MMfG3b"><span tooltip-id="ucc-17"></span><span data-is-tooltip-wrapper="true"><button
-                class="VfPpkd-Bz112c-LgbsSe yHy1rc eT1oJ tWDL4c Brnbv pFZkBd" jscontroller="soHxf"
-                jsaction="click:cOuCgd; mousedown:UX7yZ; mouseup:lbsD7e; mouseenter:tfO1Yc; mouseleave:JywGue; touchstart:p6p2H; touchmove:FwuNnf; touchend:yfqBxc; touchcancel:JMtRjd; focus:AHmuwe; blur:O22p3e; contextmenu:mg9Pef;mlnRJb:fLiPzd"
-                jsname="iJEnyb" data-disable-idom="true" aria-label="Pin message" data-tooltip-enabled="true"
-                data-tooltip-id="ucc-17" data-tooltip-x-position="3" data-tooltip-y-position="2" role="button"
-                data-message-id="1714476309237">
-                <div jsname="s3Eaab" class="VfPpkd-Bz112c-Jh9lGc"></div>
-                <div class="VfPpkd-Bz112c-J1Ukfc-LhBDec"></div><i class="google-material-icons VfPpkd-kBDsod VjEpdd"
-                  aria-hidden="true">keep</i>
-              </button>
-              <div class="EY8ABd-OWXEXe-TAWMXe" role="tooltip" aria-hidden="true" id="ucc-17">Pin message</div>
-            </span></div>
-        </div>
-      </div>
-    </div>
-  </div>
-</div> */}

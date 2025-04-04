@@ -194,82 +194,192 @@ function viewTranscript(index) {
 }
 
 // Initialize popup
-window.onload = function () {
-  const autoModeRadio = document.getElementById('auto-mode');
-  const manualModeRadio = document.getElementById('manual-mode');
-  const transcriptList = document.getElementById('transcript-list');
-  const versionElement = document.getElementById('version');
+document.addEventListener('DOMContentLoaded', function() {
+    const autoMode = document.getElementById('auto-mode');
+    const manualMode = document.getElementById('manual-mode');
+    const toggleBtn = document.getElementById('toggleBtn');
+    const autoRadio = document.getElementById('auto-radio');
+    const manualRadio = document.getElementById('manual-radio');
+    const modeStatus = document.getElementById('modeStatus');
+    const githubBtn = document.getElementById('githubBtn');
+    const transcriptLink = document.getElementById('transcriptLink');
+    const versionElement = document.getElementById('version');
 
-  document.querySelector("#version").innerHTML = `v${chrome.runtime.getManifest().version}`
-
-  chrome.storage.sync.get(['mode'], (result) => {
-    if (result.mode === 'auto') {
-      autoModeRadio.checked = true;
-    } else if (result.mode === 'manual') {
-      manualModeRadio.checked = true;
+    // Set version if element exists
+    if (versionElement) {
+        versionElement.textContent = `v${chrome.runtime.getManifest().version}`;
     }
-  });
 
-  autoModeRadio.addEventListener('change', () => {
-    if (autoModeRadio.checked) {
-      chrome.storage.sync.set({ mode: 'auto' });
+    // Function to update UI based on extension state
+    function updateExtensionState(isActive) {
+        console.log('Updating extension state:', isActive);
+        
+        // Update toggle button
+        if (isActive) {
+            toggleBtn.innerHTML = '<span>⏹️</span>Stop';
+            toggleBtn.style.background = 'linear-gradient(135deg, #f87171 0%, #ef4444 100%)';
+        } else {
+            toggleBtn.innerHTML = '<span>▶️</span>Start';
+            toggleBtn.style.background = 'linear-gradient(135deg, #9d4edd 0%, #c77dff 100%)';
+        }
+
+        // Update other elements
+        if (isActive) {
+            // Enable all elements
+            autoMode.classList.remove('disabled');
+            manualMode.classList.remove('disabled');
+            githubBtn.classList.remove('disabled');
+            transcriptLink.classList.remove('disabled');
+            autoRadio.disabled = false;
+            manualRadio.disabled = false;
+        } else {
+            // Disable all elements
+            autoMode.classList.add('disabled');
+            manualMode.classList.add('disabled');
+            githubBtn.classList.add('disabled');
+            transcriptLink.classList.add('disabled');
+            autoRadio.disabled = true;
+            manualRadio.disabled = true;
+        }
     }
-  });
-  manualModeRadio.addEventListener('change', () => {
-    if (manualModeRadio.checked) {
-      chrome.storage.sync.set({ mode: 'manual' });
+
+    // Function to update mode UI
+    function updateModeUI(mode) {
+        console.log('=== updateModeUI called with mode:', mode);
+        if (mode === 'auto') {
+            console.log('Setting UI to auto mode');
+            autoRadio.checked = true;
+            manualRadio.checked = false;
+            autoMode.classList.add('selected');
+            manualMode.classList.remove('selected');
+            modeStatus.textContent = 'Current Mode: Auto';
+            modeStatus.className = 'mode-status auto';
+        } else {
+            console.log('Setting UI to manual mode');
+            manualRadio.checked = true;
+            autoRadio.checked = false;
+            manualMode.classList.add('selected');
+            autoMode.classList.remove('selected');
+            modeStatus.textContent = 'Current Mode: Manual';
+            modeStatus.className = 'mode-status manual';
+        }
     }
-  });
 
-  // Load and display transcript history
-  function loadTranscriptHistory() {
-    chrome.storage.local.get(['meetings'], (result) => {
-      const meetings = result.meetings || [];
-      
-      if (meetings.length === 0) {
-        transcriptList.innerHTML = `
-          <div class="transcript-item" style="justify-content: center; color: #6b7280;">
-            No transcripts available yet
-          </div>
-        `;
-        return;
-      }
-
-      transcriptList.innerHTML = meetings
-        .sort((a, b) => new Date(b.meetingEndTimestamp) - new Date(a.meetingEndTimestamp))
-        .slice(0, 5) // Show only the 5 most recent transcripts
-        .map((meeting, index) => `
-          <div class="transcript-item">
-            <div class="transcript-info">
-              <div class="transcript-title">${meeting.title || 'Untitled Meeting'}</div>
-              <div class="transcript-date">${new Date(meeting.meetingEndTimestamp).toLocaleString()}</div>
-            </div>
-            <div class="transcript-actions">
-              <button class="btn btn-primary" onclick="downloadTranscript(${index})">
-                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                  <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
-                  <polyline points="7 10 12 15 17 10"/>
-                  <line x1="12" y1="15" x2="12" y2="3"/>
-                </svg>
-                Download
-              </button>
-              <button class="btn btn-secondary" onclick="viewTranscript(${index})">
-                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                  <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/>
-                  <circle cx="12" cy="12" r="3"/>
-                </svg>
-                View
-              </button>
-            </div>
-          </div>
-        `)
-        .join('');
+    // Load saved state
+    chrome.storage.local.get(['isActive'], function(result) {
+        const isActive = result.isActive || false;
+        updateExtensionState(isActive);
+        
+        // Load mode after setting extension state
+        chrome.storage.sync.get(['operationMode'], function(result) {
+            console.log('=== Loading saved state:', result);
+            const mode = result.operationMode || 'auto';
+            console.log('Setting initial mode to:', mode);
+            updateModeUI(mode);
+        });
     });
-  }
 
-  // Load transcript history when popup opens
-  document.addEventListener('DOMContentLoaded', () => {
+    // Mode selection handlers
+    autoMode.addEventListener('click', function() {
+        if (toggleBtn.innerHTML.includes('Start')) return; // Don't allow mode change if extension is off
+        console.log('=== Auto mode clicked');
+        chrome.storage.sync.set({ operationMode: 'auto' }, function() {
+            console.log('Storage updated to auto mode');
+            updateModeUI('auto');
+        });
+    });
+
+    manualMode.addEventListener('click', function() {
+        if (toggleBtn.innerHTML.includes('Start')) return; // Don't allow mode change if extension is off
+        console.log('=== Manual mode clicked');
+        chrome.storage.sync.set({ operationMode: 'manual' }, function() {
+            console.log('Storage updated to manual mode');
+            updateModeUI('manual');
+        });
+    });
+
+    // Radio button change handlers
+    autoRadio.addEventListener('change', function() {
+        if (toggleBtn.innerHTML.includes('Start')) return; // Don't allow mode change if extension is off
+        console.log('=== Auto radio changed, checked:', autoRadio.checked);
+        if (autoRadio.checked) {
+            chrome.storage.sync.set({ operationMode: 'auto' }, function() {
+                console.log('Storage updated to auto mode from radio');
+                updateModeUI('auto');
+            });
+        }
+    });
+
+    manualRadio.addEventListener('change', function() {
+        if (toggleBtn.innerHTML.includes('Start')) return; // Don't allow mode change if extension is off
+        console.log('=== Manual radio changed, checked:', manualRadio.checked);
+        if (manualRadio.checked) {
+            chrome.storage.sync.set({ operationMode: 'manual' }, function() {
+                console.log('Storage updated to manual mode from radio');
+                updateModeUI('manual');
+            });
+        }
+    });
+
+    // Toggle button handler
+    toggleBtn.addEventListener('click', function() {
+        chrome.storage.local.get(['isActive'], function(result) {
+            const newState = !result.isActive;
+            chrome.storage.local.set({ isActive: newState }, function() {
+                updateExtensionState(newState);
+                chrome.runtime.sendMessage({
+                    action: newState ? 'start' : 'stop'
+                });
+            });
+        });
+    });
+
+    // Load transcript history
     loadTranscriptHistory();
-    versionElement.textContent = chrome.runtime.getManifest().version;
+});
+
+// Load and display transcript history
+function loadTranscriptHistory() {
+  chrome.storage.local.get(['meetings'], (result) => {
+    const meetings = result.meetings || [];
+    
+    if (meetings.length === 0) {
+      transcriptLink.innerHTML = `
+        <div class="transcript-item" style="justify-content: center; color: #6b7280;">
+          No transcripts available yet
+        </div>
+      `;
+      return;
+    }
+
+    transcriptLink.innerHTML = meetings
+      .sort((a, b) => new Date(b.meetingEndTimestamp) - new Date(a.meetingEndTimestamp))
+      .slice(0, 5) // Show only the 5 most recent transcripts
+      .map((meeting, index) => `
+        <div class="transcript-item">
+          <div class="transcript-info">
+            <div class="transcript-title">${meeting.title || 'Untitled Meeting'}</div>
+            <div class="transcript-date">${new Date(meeting.meetingEndTimestamp).toLocaleString()}</div>
+          </div>
+          <div class="transcript-actions">
+            <button class="btn btn-primary" onclick="downloadTranscript(${index})">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
+                <polyline points="7 10 12 15 17 10"/>
+                <line x1="12" y1="15" x2="12" y2="3"/>
+              </svg>
+              Download
+            </button>
+            <button class="btn btn-secondary" onclick="viewTranscript(${index})">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/>
+                <circle cx="12" cy="12" r="3"/>
+              </svg>
+              View
+            </button>
+          </div>
+        </div>
+      `)
+      .join('');
   });
 }
